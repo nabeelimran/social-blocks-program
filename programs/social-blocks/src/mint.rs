@@ -1,8 +1,12 @@
 use {
     anchor_lang::{
-        prelude::*,
-        solana_program::program::invoke,
-        system_program,
+      prelude::*,
+      system_program,
+      solana_program::{
+        program::{
+          invoke,
+        }
+      },
     },
     anchor_spl::{
         associated_token,
@@ -20,6 +24,8 @@ pub fn mint(
     metadata_title: String, 
     metadata_symbol: String, 
     metadata_uri: String,
+    kind: u8,
+    price: u64
 ) -> Result<()> {
 
     msg!("Creating mint account...");
@@ -138,61 +144,81 @@ pub fn mint(
 
     msg!("Token mint process completed successfully.");
 
+    let post = &mut ctx.accounts.post;
+
+    if kind > 2 {
+      return Err(ErrorCode::InvalidType.into())
+    }
+    if kind > 0 && post.price <= 0 {
+      return Err(ErrorCode::ZeroPrice.into())
+    }
+
+    if kind == 0 {
+      post.price = 0;
+    } else {
+      post.price = price;
+    }
+    post.kind = kind;
+
+    post.owner = *ctx.accounts.mint_authority.key;
+    post.creator = *ctx.accounts.mint_authority.key;
+
     Ok(())
 }
 
 
 #[derive(Accounts)]
 pub struct MintNft<'info> {
-    /// CHECK: We're about to create this with Metaplex
-    #[account(mut)]
-    pub metadata: UncheckedAccount<'info>,
-    /// CHECK: We're about to create this with Metaplex
-    #[account(mut)]
-    pub master_edition: UncheckedAccount<'info>,
-    #[account(mut)]
-    pub mint: Signer<'info>,
-    /// CHECK: We're about to create this with Anchor
-    #[account(mut)]
-    pub token_account: UncheckedAccount<'info>,
-    #[account(mut)]
-    pub mint_authority: Signer<'info>,
-    pub rent: Sysvar<'info, Rent>,
-    pub system_program: Program<'info, System>,
-    pub token_program: Program<'info, token::Token>,
-    pub associated_token_program: Program<'info, associated_token::AssociatedToken>,
-    /// CHECK: Metaplex will check this
-    pub token_metadata_program: UncheckedAccount<'info>,
+  #[account(init, payer = mint_authority, space = Post::LEN)]
+  pub post: Account<'info, Post>,
+  /// CHECK: We're about to create this with Metaplex
+  #[account(mut)]
+  pub metadata: UncheckedAccount<'info>,
+  /// CHECK: We're about to create this with Metaplex
+  #[account(mut)]
+  pub master_edition: UncheckedAccount<'info>,
+  #[account(mut)]
+  pub mint: Signer<'info>,
+  /// CHECK: We're about to create this with Anchor
+  #[account(mut)]
+  pub token_account: UncheckedAccount<'info>,
+  #[account(mut)]
+  pub mint_authority: Signer<'info>,
+  pub rent: Sysvar<'info, Rent>,
+  pub system_program: Program<'info, System>,
+  pub token_program: Program<'info, token::Token>,
+  pub associated_token_program: Program<'info, associated_token::AssociatedToken>,
+  /// CHECK: Metaplex will check this
+  pub token_metadata_program: UncheckedAccount<'info>,
 }
 
-// const DISCRIMINATOR_LENGTH: usize = 8;
-// const PUBLIC_KEY_LENGTH: usize = 32;
-// const STRING_LENGTH_PREFIX: usize = 4; // Stores the size of the string.
-// const MAX_UNAME_LENGTH: usize = 16 * 4; // 50 chars max.
-// const MAX_DNAME_LENGTH: usize = 32 * 4; // 50 chars max.
-// const MAX_IMAGE_LENGTH: usize = 200 * 4; // 280 chars max.
+const DISCRIMINATOR_LENGTH: usize = 8;
+const KIND_LENGTH: usize = 1;
+const PRICE_LENGTH: usize = 8;
+const PUBLIC_KEY_LENGTH: usize = 32;
 
-// impl Profile {
-//     const LEN: usize = DISCRIMINATOR_LENGTH
-//       + PUBLIC_KEY_LENGTH // Author.
-//       + STRING_LENGTH_PREFIX + MAX_UNAME_LENGTH // Topic.
-//       + STRING_LENGTH_PREFIX + MAX_DNAME_LENGTH // Content.
-//       + STRING_LENGTH_PREFIX + MAX_IMAGE_LENGTH; // Content.
-// }
+impl Post {
+    const LEN: usize = DISCRIMINATOR_LENGTH
+      + PUBLIC_KEY_LENGTH // mint.
+      + KIND_LENGTH
+      + PRICE_LENGTH
+      + PUBLIC_KEY_LENGTH // Owner.
+      + PUBLIC_KEY_LENGTH; // Creator.
+}
 
-// #[account]
-// pub struct Post {
-//     pub uri: String,
-//     pub image: String,
-//     pub title: String,
-//     pub description: String,
-//     pub owner: String,
-//     pub creator: String,
-//     pub status: String,
-// }
+#[account]
+pub struct Post {
+    pub mint: Pubkey,
+    pub kind: u8, // 0: not for sale, 1: sale, 2: auction
+    pub price: u64,
+    pub owner: Pubkey,
+    pub creator: Pubkey,
+}
 
-// pub enum PostType {
-//   NotForSale,
-//   Sale(u32),
-//   Auction{ auction : Auction }
-// }
+#[error_code]
+pub enum ErrorCode {
+    #[msg("The type should be 0,1 or 2.")]
+    InvalidType,
+    #[msg("Price/Base price should be greater than zero.")]
+    ZeroPrice
+}

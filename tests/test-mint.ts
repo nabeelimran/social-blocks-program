@@ -1,6 +1,6 @@
 import * as anchor from "@project-serum/anchor";
 // ** Comment this to use solpg imported IDL **
-import { NftMarketplace } from "../target/types/nft_marketplace";
+import { SocialBlocks } from "../target/types/social_blocks";
 
 
 describe("nft-marketplace", async () => {
@@ -8,6 +8,8 @@ describe("nft-marketplace", async () => {
   const testNftTitle = "Beta";
   const testNftSymbol = "BETA";
   const testNftUri = "https://raw.githubusercontent.com/Coding-and-Crypto/Solana-NFT-Marketplace/master/assets/example.json";
+  const testType = 0;
+  const testPrice = new anchor.BN(0);
 
   const provider = anchor.AnchorProvider.env()
   const wallet = provider.wallet as anchor.Wallet;
@@ -19,7 +21,7 @@ describe("nft-marketplace", async () => {
   //   new anchor.web3.PublicKey("H2UJjAQTuVJYhaBhh6GD2KaprLBTp1vhP2aaHioya5NM"),
   // );
   // ** Comment this to use solpg imported IDL **
-  const program = anchor.workspace.NftMarketplace as anchor.Program<NftMarketplace>;
+  const program = anchor.workspace.SocialBlocks as anchor.Program<SocialBlocks>;
 
   const TOKEN_METADATA_PROGRAM_ID = new anchor.web3.PublicKey(
     "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
@@ -31,6 +33,7 @@ describe("nft-marketplace", async () => {
     // Derive the mint address and the associated token account address
 
     const mintKeypair: anchor.web3.Keypair = anchor.web3.Keypair.generate();
+    const postKeypair: anchor.web3.Keypair = anchor.web3.Keypair.generate();
     const tokenAddress = await anchor.utils.token.associatedAddress({
       mint: mintKeypair.publicKey,
       owner: wallet.publicKey
@@ -62,9 +65,10 @@ describe("nft-marketplace", async () => {
     // Transact with the "mint" function in our on-chain program
     
     await program.methods.mint(
-      testNftTitle, testNftSymbol, testNftUri
+      testNftTitle,testNftSymbol,testNftUri,testType, testPrice
     )
     .accounts({
+      post: postKeypair.publicKey,
       masterEdition: masterEditionAddress,
       metadata: metadataAddress,
       mint: mintKeypair.publicKey,
@@ -72,7 +76,7 @@ describe("nft-marketplace", async () => {
       mintAuthority: wallet.publicKey,
       tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
     })
-    .signers([mintKeypair])
+    .signers([mintKeypair, postKeypair])
     .rpc();
   });
 });
